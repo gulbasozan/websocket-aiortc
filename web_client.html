@@ -1,0 +1,71 @@
+<!--
+ ===============================================
+ Title:  Simple Browser RTC Client
+ Author: gulbasozan
+ Date:   26 Jul 2024
+ ===============================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+            const ws = new WebSocket("ws://0.0.0.0:8080/ws");
+            let peerConnection;
+            let opener = {
+                sender: "browser",
+                type: "opener",
+            }
+
+            let status = false;
+            ws.onopen = e => {console.log('websocket opened'); ws.send(JSON.stringify(opener))}
+            ws.onclose = e => console.log('websocket closed')
+
+            ws.onmessage = async (message) => {
+                const data = await JSON.parse(message.data);
+
+                console.log(data)
+
+                if (data.type == "status" && data.status == "ready") status = true; 
+                if (status){
+                    if (data.type == "offer") handleOffer(data);
+                    else if (data.candidate) handleCandidate(data.candidate);
+                    else console.log("Unknown message type: ", data.type);
+                }                
+
+            }
+
+            function createPeerConnection() {
+                console.log("Creating RTC Peer")
+                peerConnection = new RTCPeerConnection();
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({candidate: event.candidate}));
+
+                    };
+                }             
+            }
+
+            async function handleOffer(offer) {
+                createPeerConnection();
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                ws.send(JSON.stringify(answer));
+            }
+
+            async function handleCandidate(candidate) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+
+    </script>
+    
+</body>
+</html>
